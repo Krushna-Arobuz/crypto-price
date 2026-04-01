@@ -1,20 +1,10 @@
 const WebSocket = require("ws");
-const http = require("http");
 
 const MAX_CLIENTS = 100;
 
-// Creates the local WS server that broadcasts price updates to connected clients.
-function createLocalWSServer(port) {
-  const server = http.createServer((req, res) => {
-    if (req.url === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok", clients: wss.clients.size }));
-    } else {
-      res.writeHead(404);
-      res.end("Not found");
-    }
-  });
-
+// Creates the WS server attached to an existing HTTP server.
+// This way both Express and WebSocket share the same port.
+function createLocalWSServer(server) {
   const wss = new WebSocket.Server({
     server,
     path: "/ws",
@@ -61,8 +51,6 @@ function createLocalWSServer(port) {
       console.error(`[ws] client ${clientId} error:`, err.message);
     });
   });
-
-  server.listen(port);
 
   // Broadcast a message to all connected clients
   function broadcast(message) {

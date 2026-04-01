@@ -3,7 +3,7 @@ const path = require("path");
 const rateLimit = require("express-rate-limit");
 const { priceStore } = require("./priceStore");
 
-function createRestAPI(port) {
+function createRestAPI() {
   const app = express();
   app.use(express.json());
 
@@ -63,10 +63,6 @@ function createRestAPI(port) {
       pairs: [...priceStore.keys()],
       timestamp: new Date().toISOString(),
     });
-  });
-
-  app.listen(port, () => {
-    console.log(`[server] REST API listening on http://localhost:${port}`);
   });
 
   return app;

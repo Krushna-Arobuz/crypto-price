@@ -163,7 +163,9 @@
   </div>
 
   <script>
-    const WS_URL = `ws://${location.hostname}:8080/ws`;
+    // use wss:// on https, ws:// on http. Same host so it works on Render too.
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const WS_URL = `${wsProtocol}//${location.host}/ws`;
     const dot = document.getElementById('dot');
     const statusText = document.getElementById('statusText');
     const cardsEl = document.getElementById('cards');
