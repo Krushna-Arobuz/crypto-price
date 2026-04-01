@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crypto Price Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #121212;
+      color: #e0e0e0;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    /* connection status */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #666;
+    }
+    .dot.connected { background: #4caf50; }
+    .dot.disconnected { background: #f44336; }
+
+    /* cards grid */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .card {
+      background: #1e1e1e;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      padding: 18px;
+      transition: border-color 0.3s;
+    }
+    .card:hover { border-color: #444; }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .symbol {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .badge {
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+    }
+    .badge.up { background: rgba(76, 175, 80, 0.15); color: #4caf50; }
+    .badge.down { background: rgba(244, 67, 54, 0.15); color: #f44336; }
+
+    .price {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #fff;
+    }
+
+    .details {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      border-top: 1px solid #2a2a2a;
+      padding-top: 12px;
+    }
+
+    .detail-label {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .detail-value {
+      font-size: 13px;
+      font-weight: 500;
+      color: #ccc;
+    }
+
+    .updated {
+      font-size: 11px;
+      color: #555;
+      margin-top: 10px;
+    }
+
+    /* log section */
+    .log-title {
+      font-size: 14px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    #log {
+      background: #0a0a0a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px;
+      height: 180px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #4caf50;
+    }
+
+    #log::-webkit-scrollbar { width: 4px; }
+    #log::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+
+    .log-entry { margin-bottom: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Crypto Price Dashboard</h1>
+  <p class="subtitle">Live prices from Binance WebSocket</p>
+
+  <div class="status-bar">
+    <div class="dot" id="dot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <div>
+    <div class="log-title">Event Log</div>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const WS_URL = `ws://${location.hostname}:8080/ws`;
+    const dot = document.getElementById('dot');
+    const statusText = document.getElementById('statusText');
+    const cardsEl = document.getElementById('cards');
+    const logEl = document.getElementById('log');
+
+    function log(msg) {
+      const el = document.createElement('div');
+      el.className = 'log-entry';
+      el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logEl.prepend(el);
+      // keep log from growing too large
+      if (logEl.childElementCount > 150) {
+        logEl.removeChild(logEl.lastChild);
+      }
+    }
+
+    function formatPrice(val) {
+      const n = parseFloat(val);
+      if (n >= 1000) return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return n.toFixed(2);
+    }
+
+    function renderCard(data) {
+      const isUp = data.change24h >= 0;
+
+      let card = document.getElementById('card-' + data.symbol);
+      if (!card) {
+        card = document.createElement('div');
+        card.className = 'card';
+        card.id = 'card-' + data.symbol;
+        cardsEl.appendChild(card);
+      }
+
+      card.innerHTML = `
+        <div class="card-header">
+          <span class="symbol">${data.symbol}</span>
+          <span class="badge ${isUp ? 'up' : 'down'}">${isUp ? '▲' : '▼'} ${Math.abs(data.change24h).toFixed(2)}%</span>
+        </div>
+        <div class="price">$${formatPrice(data.lastPrice)}</div>
+        <div class="details">
+          <div>
+            <div class="detail-label">24h High</div>
+            <div class="detail-value">$${formatPrice(data.highPrice)}</div>
+          </div>
+          <div>
+            <div class="detail-label">24h Low</div>
+            <div class="detail-value">$${formatPrice(data.lowPrice)}</div>
+          </div>
+          <div>
+            <div class="detail-label">Volume</div>
+            <div class="detail-value">${parseFloat(data.volume).toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          </div>
+        </div>
+        <div class="updated">Last update: ${new Date(data.timestamp).toLocaleTimeString()}</div>
+      `;
+    }
+
+    function connect() {
+      const ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        dot.className = 'dot connected';
+        statusText.textContent = 'Connected';
+        log('Connected to ws://localhost:8080/ws');
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'connected') {
+            log('Assigned client ID: ' + data.clientId);
+            return;
+          }
+          if (data.symbol) {
+            renderCard(data);
+          }
+        } catch (err) {
+          log('Error parsing message: ' + err.message);
+        }
+      };
+
+      ws.onclose = () => {
+        dot.className = 'dot disconnected';
+        statusText.textContent = 'Disconnected - reconnecting...';
+        log('Disconnected. Reconnecting in 3s...');
+        setTimeout(connect, 3000);
+      };
+
+      ws.onerror = () => {
+        log('WebSocket error');
+      };
+    }
+
+    connect();
+  </script>
+</body>
+</html>
